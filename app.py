@@ -33,7 +33,7 @@ You have deep knowledge of:
 - Topics including: astral travel, entity communication, healing, consciousness states, past lives, death/dying, spirit rescue, time/space perception, energy phenomena, and planetary consciousness
 
 INSTRUCTIONS:
-1. Ground your answers in the actual transcript excerpts provided as context. Always cite your sources with the explorer code, session number, and relevant quote.
+1. Ground your answers in the actual transcript excerpts provided as context. Always cite your sources using the source label provided with each excerpt and include a relevant quote.
 2. When synthesizing across sessions, note which explorers/sessions contribute to each point.
 3. If the context doesn't contain enough information to answer fully, say so honestly — don't fabricate details about the sessions.
 4. Use a warm, knowledgeable tone — like a seasoned researcher sharing fascinating findings.
@@ -43,7 +43,7 @@ INSTRUCTIONS:
 FORMAT:
 - Use clear paragraphs for readability
 - Include direct quotes from transcripts when relevant, formatted with quotation marks
-- Cite sources as (Explorer CODE, Session #) — e.g., (SHE, Session 6)
+- Cite sources using the label from each excerpt — e.g., (SHE, Session 6) or (Robert Monroe, Gateway Voyage: "Saturday Night Talk")
 - For cross-session themes, organize your response thematically"""
 
 # ── Initialize Services (cached) ───────────────────────────────────────────
@@ -88,6 +88,37 @@ def retrieve_context(query: str, voyage_client, pinecone_index, top_k: int = TOP
     return contexts
 
 
+def format_source_label(ctx: dict) -> str:
+    """Create a readable source label from context metadata."""
+    explorer_id = ctx.get("explorer_id", "Unknown")
+    filename = ctx.get("filename", "")
+    session_number = ctx.get("session_number", 0)
+
+    # For Robert Monroe files, use the filename as the source
+    if explorer_id.startswith("RAM"):
+        # Clean up the filename: remove extension, (Transcript), _djvu
+        name = filename
+        for suffix in [".pdf", "_djvu.txt", " (Transcript)", "(Transcript)"]:
+            name = name.replace(suffix, "")
+        name = name.strip()
+        if explorer_id == "RAM_Gateway":
+            return f"Robert Monroe, Gateway Voyage: \"{name}\""
+        elif explorer_id == "RAM_Guidelines":
+            return f"Robert Monroe, Guidelines: \"{name}\""
+        elif explorer_id == "RAM_INSCOM":
+            return f"Robert Monroe, INSCOM: \"{name}\""
+        else:
+            return f"Robert Monroe: \"{name}\""
+
+    # For Explorer Sessions, use explorer code + session number
+    if session_number and session_number != 0:
+        return f"Explorer {explorer_id}, Session {session_number}"
+    else:
+        # Fall back to filename
+        name = filename.replace(".pdf", "").replace(".txt", "").strip()
+        return f"Explorer {explorer_id}: \"{name}\""
+
+
 def build_context_prompt(contexts: list[dict]) -> str:
     """Format retrieved contexts into a prompt section."""
     if not contexts:
@@ -95,8 +126,8 @@ def build_context_prompt(contexts: list[dict]) -> str:
 
     parts = ["Here are the most relevant transcript excerpts:\n"]
     for i, ctx in enumerate(contexts, 1):
-        parts.append(f"--- Excerpt {i} (Explorer: {ctx['explorer_id']}, "
-                     f"Session: {ctx['session_number']}, "
+        source_label = format_source_label(ctx)
+        parts.append(f"--- Excerpt {i} ({source_label}, "
                      f"Relevance: {ctx['score']:.2f}) ---")
         parts.append(ctx["text"])
         if ctx["topics"]:
@@ -210,13 +241,13 @@ def main():
             if message.get("sources") and show_sources:
                 with st.expander("📚 Sources"):
                     for src in message["sources"]:
-                        st.markdown(f"**{src['explorer_id']} — Session {src['session_number']}** "
+                        st.markdown(f"**{format_source_label(src)}** "
                                     f"(relevance: {src['score']:.0%})")
                         st.caption(src["text"][:300] + "..." if len(src["text"]) > 300 else src["text"])
                         st.divider()
 
     # Chat input
-    if prompt := st.chat_input("Ask about the Explorer Sessions..."):
+    if prompt := st.chat_input("Ask about the Monroe Institute archives..."):
         # Display user message
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
@@ -238,7 +269,7 @@ def main():
             if contexts and show_sources:
                 with st.expander("📚 Sources"):
                     for src in contexts:
-                        st.markdown(f"**{src['explorer_id']} — Session {src['session_number']}** "
+                        st.markdown(f"**{format_source_label(src)}** "
                                     f"(relevance: {src['score']:.0%})")
                         st.caption(src["text"][:300] + "..." if len(src["text"]) > 300 else src["text"])
                         st.divider()
