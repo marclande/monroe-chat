@@ -21,13 +21,15 @@ VOYAGE_MODEL = "voyage-3"
 CLAUDE_MODEL = "claude-sonnet-4-20250514"
 TOP_K = 8  # Number of chunks to retrieve
 
-SYSTEM_PROMPT = """You are an expert research assistant specializing in the Monroe Institute's Explorer Sessions — a collection of documented consciousness exploration sessions conducted primarily between 1974 and 1989 under the guidance of Robert Monroe.
+SYSTEM_PROMPT = """You are an expert research assistant specializing in the Monroe Institute's archives — including the Explorer Sessions (1974-1990), Robert Monroe's talks and interviews, Gateway Voyage and Guidelines program talks, and INSCOM military sessions.
 
 You have deep knowledge of:
 - Focus levels (Focus 10, 12, 15, 21, etc.) and their characteristics
 - Hemi-Sync technology and its applications
 - The various explorers (identified by codes like IMEC, SHE, GLA, AUB, etc.) and their unique experiences
 - Channeled entities and communications (e.g., Miranon through SHE/Shay Ellsworth)
+- Robert Monroe's personal experiences, philosophy, and teachings from his talks and interviews
+- Gateway Voyage and Guidelines program content
 - Topics including: astral travel, entity communication, healing, consciousness states, past lives, death/dying, spirit rescue, time/space perception, energy phenomena, and planetary consciousness
 
 INSTRUCTIONS:
@@ -142,17 +144,22 @@ def main():
     )
 
     # Header
-    st.title("🔮 Monroe Institute Explorer Sessions")
-    st.caption("Ask questions about consciousness exploration sessions from 1974–1989. "
-               "Powered by RAG over 460+ session transcripts.")
+    st.title("🔮 Monroe Institute Archives")
+    st.caption("Ask questions about the Monroe Institute's consciousness research. "
+               "Powered by RAG over 600+ transcripts from Explorer Sessions, Robert Monroe's talks, and more.")
 
     # Sidebar
     with st.sidebar:
         st.header("About")
         st.markdown("""
-        This app searches across **460+ transcripts** from the Monroe Institute's
-        Explorer Sessions and uses Claude to synthesize answers grounded in the
-        actual session content.
+        This app searches across **600+ transcripts** from the Monroe Institute
+        Archives and uses Claude to synthesize answers grounded in the actual content.
+
+        **Collections include:**
+        - Explorer Sessions (1974–1990) — 400+ sessions
+        - Robert Monroe talks & interviews — 140+ files
+        - Gateway Voyage & Guidelines program talks
+        - INSCOM military sessions
 
         **Explorers include:**
         - IMEC (Marie Coble)
@@ -167,7 +174,7 @@ def main():
         - Past lives & reincarnation
         - Death, dying & spirit rescue
         - Time/space perception
-        - Prophecies & Earth changes
+        - Robert Monroe's philosophy & experiences
         """)
 
         st.divider()
