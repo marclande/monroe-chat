@@ -1,6 +1,6 @@
 """
-Monroe Institute Explorer Sessions — Chat Interface
-=====================================================
+Monroe Institute Archives — Chat Interface
+=============================================
 Streamlit-based RAG chat app powered by Claude + Voyage AI + Pinecone.
 """
 
@@ -21,7 +21,7 @@ VOYAGE_MODEL = "voyage-3"
 CLAUDE_MODEL = "claude-sonnet-4-20250514"
 TOP_K = 8  # Number of chunks to retrieve
 
-SYSTEM_PROMPT = """You are an expert research assistant specializing in the Monroe Institute's archives — including the Explorer Sessions (1974-1990), Robert Monroe's talks and interviews, Gateway Voyage and Guidelines program talks, and INSCOM military sessions.
+SYSTEM_PROMPT = """You are an expert research assistant specializing in the Monroe Institute's archives — including the Explorer Sessions (1974-1990), Robert Monroe's talks and interviews, Gateway Voyage and Guidelines program talks, Professional Seminars, and INSCOM military sessions.
 
 You have deep knowledge of:
 - Focus levels (Focus 10, 12, 15, 21, etc.) and their characteristics
@@ -30,6 +30,7 @@ You have deep knowledge of:
 - Channeled entities and communications (e.g., Miranon through SHE/Shay Ellsworth)
 - Robert Monroe's personal experiences, philosophy, and teachings from his talks and interviews
 - Gateway Voyage and Guidelines program content
+- Professional Seminar presentations on consciousness research
 - Topics including: astral travel, entity communication, healing, consciousness states, past lives, death/dying, spirit rescue, time/space perception, energy phenomena, and planetary consciousness
 
 INSTRUCTIONS:
@@ -46,6 +47,16 @@ FORMAT:
 - Cite sources using the label from each excerpt — e.g., (SHE, Session 6) or (Robert Monroe, Gateway Voyage: "Saturday Night Talk")
 - For cross-session themes, organize your response thematically"""
 
+# Example questions for new users
+EXAMPLE_QUESTIONS = [
+    "What is Focus 15 and how do explorers experience it?",
+    "What did Robert Monroe say about out-of-body experiences?",
+    "Tell me about Miranon's teachings through explorer SHE",
+    "What role does the monitor play in Explorer sessions?",
+    "What did the explorers discover about death and the afterlife?",
+    "How does Hemi-Sync technology work according to Monroe?",
+]
+
 # ── Initialize Services (cached) ───────────────────────────────────────────
 
 
@@ -61,18 +72,15 @@ def init_clients():
 
 def retrieve_context(query: str, voyage_client, pinecone_index, top_k: int = TOP_K) -> list[dict]:
     """Embed the query and retrieve relevant chunks from Pinecone."""
-    # Embed the query
     result = voyage_client.embed([query], model=VOYAGE_MODEL, input_type="query")
     query_embedding = result.embeddings[0]
 
-    # Query Pinecone
     results = pinecone_index.query(
         vector=query_embedding,
         top_k=top_k,
         include_metadata=True,
     )
 
-    # Format results
     contexts = []
     for match in results.matches:
         meta = match.metadata
@@ -94,9 +102,16 @@ def format_source_label(ctx: dict) -> str:
     filename = ctx.get("filename", "")
     session_number = ctx.get("session_number", 0)
 
-    # For Robert Monroe files, use the filename as the source
+    # Audio transcripts (Professional Seminars, Quarterly Tapes)
+    if explorer_id in ("Professional_Seminars", "Quarterly_Tapes"):
+        name = str(session_number) if session_number else filename
+        for suffix in [".txt", ".pdf"]:
+            name = name.replace(suffix, "")
+        category = "Professional Seminar" if explorer_id == "Professional_Seminars" else "Quarterly Tape"
+        return f"{category}: \"{name}\""
+
+    # Robert Monroe files
     if explorer_id.startswith("RAM"):
-        # Clean up the filename: remove extension, (Transcript), _djvu
         name = filename
         for suffix in [".pdf", "_djvu.txt", " (Transcript)", "(Transcript)"]:
             name = name.replace(suffix, "")
@@ -110,11 +125,10 @@ def format_source_label(ctx: dict) -> str:
         else:
             return f"Robert Monroe: \"{name}\""
 
-    # For Explorer Sessions, use explorer code + session number
+    # Explorer Sessions
     if session_number and session_number != 0:
         return f"Explorer {explorer_id}, Session {session_number}"
     else:
-        # Fall back to filename
         name = filename.replace(".pdf", "").replace(".txt", "").strip()
         return f"Explorer {explorer_id}: \"{name}\""
 
@@ -137,7 +151,7 @@ def build_context_prompt(contexts: list[dict]) -> str:
     return "\n".join(parts)
 
 
-def build_claude_messages(query: str, contexts: list[dict], chat_history: list[dict]) -> tuple[str, list[dict]]:
+def build_claude_messages(query: str, contexts: list[dict], chat_history: list[dict]) -> list[dict]:
     """Build the messages list for Claude."""
     context_prompt = build_context_prompt(contexts)
 
@@ -170,60 +184,106 @@ def stream_claude_response(query: str, contexts: list[dict], chat_history: list[
             yield text
 
 
+def handle_query(prompt, claude_client, voyage_client, pinecone_index, top_k, show_sources):
+    """Process a user query: retrieve context, stream response, show sources."""
+    # Add user message to state and display
+    st.session_state.messages.append({"role": "user", "content": prompt})
+
+    # Retrieve and respond
+    with st.chat_message("assistant"):
+        with st.spinner("Searching archives..."):
+            contexts = retrieve_context(prompt, voyage_client, pinecone_index, top_k=top_k)
+
+        # Stream the response
+        response = st.write_stream(
+            stream_claude_response(
+                prompt, contexts, st.session_state.chat_history, claude_client
+            )
+        )
+
+        # Show sources
+        if contexts and show_sources:
+            with st.expander("📚 Sources"):
+                for src in contexts:
+                    st.markdown(f"**{format_source_label(src)}** "
+                                f"(relevance: {src['score']:.0%})")
+                    st.caption(src["text"][:300] + "..." if len(src["text"]) > 300 else src["text"])
+                    st.divider()
+
+    # Save to state
+    st.session_state.messages.append({
+        "role": "assistant",
+        "content": response,
+        "sources": contexts,
+    })
+    st.session_state.chat_history.append({"role": "user", "content": prompt})
+    st.session_state.chat_history.append({"role": "assistant", "content": response})
+
+
 # ── Streamlit UI ───────────────────────────────────────────────────────────
 
 def main():
     st.set_page_config(
-        page_title="Monroe Institute Explorer",
+        page_title="Monroe Institute Archives",
         page_icon="🔮",
         layout="wide",
     )
 
-    # Header
-    st.title("🔮 Monroe Institute Archives")
-    st.caption("Ask questions about the Monroe Institute's consciousness research. "
-               "Powered by RAG over 600+ transcripts from Explorer Sessions, Robert Monroe's talks, and more.")
+    # Custom CSS for cleaner look
+    st.markdown("""
+    <style>
+    .stApp { max-width: 1200px; margin: 0 auto; }
+    .example-btn { margin: 2px 0; }
+    [data-testid="stSidebar"] { background-color: #1a1a2e; }
+    </style>
+    """, unsafe_allow_html=True)
 
-    # Sidebar
+    # Sidebar — concise
     with st.sidebar:
-        st.header("About")
-        st.markdown("""
-        This app searches across **600+ transcripts** from the Monroe Institute
-        Archives and uses Claude to synthesize answers grounded in the actual content.
-
-        **Collections include:**
-        - Explorer Sessions (1974–1990) — 400+ sessions
-        - Robert Monroe talks & interviews — 140+ files
-        - Gateway Voyage & Guidelines program talks
-        - INSCOM military sessions
-
-        **Explorers include:**
-        - IMEC (Marie Coble)
-        - SHE (Shay Ellsworth / Miranon)
-        - GLA, AUB, RPE, MDG, and 50+ others
-
-        **Topics covered:**
-        - Focus levels & Hemi-Sync
-        - Entity communication
-        - Astral travel & OBEs
-        - Healing & energy work
-        - Past lives & reincarnation
-        - Death, dying & spirit rescue
-        - Time/space perception
-        - Robert Monroe's philosophy & experiences
-        """)
+        st.markdown("### 🔮 Monroe Archives")
+        st.caption(
+            "AI-powered search across 770+ transcripts from the Monroe Institute's "
+            "consciousness research archives (1974–present)."
+        )
 
         st.divider()
 
-        st.header("Settings")
-        top_k = st.slider("Sources to retrieve", min_value=3, max_value=15, value=8)
-        show_sources = st.checkbox("Show source excerpts", value=True)
+        with st.expander("📖 What's in the archive?", expanded=False):
+            st.markdown("""
+**Explorer Sessions** — 460+ sessions (1974–1990)
+Consciousness explorers like IMEC, SHE, GLA, AUB, and 50+ others exploring focus levels, entity communication, OBEs, and more.
+
+**Robert Monroe** — 280+ talks & interviews
+Gateway Voyage talks, Guidelines, INSCOM military sessions, and personal interviews.
+
+**Professional Seminars** — 16 presentations
+Skip Atwater, Beverly Rubik, Rita Warren, and other researchers on Hemi-Sync applications.
+
+**Quarterly Member Tapes** — 14 recordings
+Member-exclusive talks, interviews, and discussions.
+            """)
 
         st.divider()
-        if st.button("🗑️ Clear Chat"):
+
+        # Settings — simplified
+        show_sources = st.checkbox("Show source citations", value=True)
+
+        with st.expander("⚙️ Advanced", expanded=False):
+            top_k = st.slider(
+                "Search depth",
+                min_value=3, max_value=15, value=8,
+                help="How many transcript excerpts to search through for each question"
+            )
+
+        st.divider()
+        if st.button("🗑️ Clear conversation"):
             st.session_state.messages = []
             st.session_state.chat_history = []
+            st.session_state.pop("pending_question", None)
             st.rerun()
+
+        st.divider()
+        st.caption("Built with Claude, Voyage AI & Pinecone")
 
     # Initialize clients
     try:
@@ -239,54 +299,50 @@ def main():
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
-    # Display chat history
-    for message in st.session_state.messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-            if message.get("sources") and show_sources:
-                with st.expander("📚 Sources"):
-                    for src in message["sources"]:
-                        st.markdown(f"**{format_source_label(src)}** "
-                                    f"(relevance: {src['score']:.0%})")
-                        st.caption(src["text"][:300] + "..." if len(src["text"]) > 300 else src["text"])
-                        st.divider()
+    # Welcome screen (only when no messages yet)
+    if not st.session_state.messages:
+        st.markdown("## 🔮 Monroe Institute Archives")
+        st.markdown(
+            "Ask anything about the Monroe Institute's consciousness research — "
+            "Explorer sessions, Robert Monroe's talks, Focus levels, Hemi-Sync, "
+            "out-of-body experiences, and more."
+        )
+        st.markdown("")
+        st.markdown("**Try one of these questions:**")
+
+        # Example question buttons in 2 columns
+        cols = st.columns(2)
+        for i, question in enumerate(EXAMPLE_QUESTIONS):
+            col = cols[i % 2]
+            if col.button(question, key=f"example_{i}", use_container_width=True):
+                st.session_state.pending_question = question
+                st.rerun()
+    else:
+        # Display chat history
+        for message in st.session_state.messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+                if message.get("sources") and show_sources:
+                    with st.expander("📚 Sources"):
+                        for src in message["sources"]:
+                            st.markdown(f"**{format_source_label(src)}** "
+                                        f"(relevance: {src['score']:.0%})")
+                            st.caption(src["text"][:300] + "..." if len(src["text"]) > 300 else src["text"])
+                            st.divider()
+
+    # Handle pending question from example buttons
+    if "pending_question" in st.session_state:
+        pending = st.session_state.pop("pending_question")
+        with st.chat_message("user"):
+            st.markdown(pending)
+        handle_query(pending, claude_client, voyage_client, pinecone_index, top_k, show_sources)
+        st.rerun()
 
     # Chat input
     if prompt := st.chat_input("Ask about the Monroe Institute archives..."):
-        # Display user message
-        st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
             st.markdown(prompt)
-
-        # Retrieve and respond
-        with st.chat_message("assistant"):
-            with st.spinner("Searching transcripts..."):
-                contexts = retrieve_context(prompt, voyage_client, pinecone_index, top_k=top_k)
-
-            # Stream the response word by word
-            response = st.write_stream(
-                stream_claude_response(
-                    prompt, contexts, st.session_state.chat_history, claude_client
-                )
-            )
-
-            # Show sources
-            if contexts and show_sources:
-                with st.expander("📚 Sources"):
-                    for src in contexts:
-                        st.markdown(f"**{format_source_label(src)}** "
-                                    f"(relevance: {src['score']:.0%})")
-                        st.caption(src["text"][:300] + "..." if len(src["text"]) > 300 else src["text"])
-                        st.divider()
-
-        # Save to state
-        st.session_state.messages.append({
-            "role": "assistant",
-            "content": response,
-            "sources": contexts,
-        })
-        st.session_state.chat_history.append({"role": "user", "content": prompt})
-        st.session_state.chat_history.append({"role": "assistant", "content": response})
+        handle_query(prompt, claude_client, voyage_client, pinecone_index, top_k, show_sources)
 
 
 if __name__ == "__main__":
