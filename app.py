@@ -269,20 +269,21 @@ CUSTOM_CSS = """
     margin: 0.5rem auto !important;
 }
 
-[data-testid="stChatMessage"] p {
-    color: rgba(220, 215, 245, 0.88) !important;
+[data-testid="stChatMessage"] p,
+[data-testid="stChatMessage"] li {
+    color: rgba(235, 233, 245, 0.92) !important;
     line-height: 1.7 !important;
     font-size: 0.95rem !important;
 }
 
 [data-testid="stChatMessage"] h2,
 [data-testid="stChatMessage"] h3 {
-    color: rgba(200, 180, 255, 0.9) !important;
+    color: rgba(240, 235, 255, 0.95) !important;
     font-weight: 600 !important;
 }
 
 [data-testid="stChatMessage"] strong {
-    color: rgba(180, 160, 255, 0.95) !important;
+    color: rgba(220, 210, 255, 0.98) !important;
 }
 
 [data-testid="stChatMessage"] blockquote {
