@@ -242,7 +242,7 @@ CUSTOM_CSS = """
 }
 
 [data-testid="stChatInput"] textarea::placeholder {
-    color: rgba(139, 92, 246, 0.35) !important;
+    color: rgba(180, 175, 210, 0.5) !important;
     font-style: italic;
 }
 
