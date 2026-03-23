@@ -137,32 +137,37 @@ def build_context_prompt(contexts: list[dict]) -> str:
     return "\n".join(parts)
 
 
-def chat_with_claude(query: str, contexts: list[dict], chat_history: list[dict],
-                     claude_client) -> str:
-    """Send query + context + history to Claude and get a response."""
+def build_claude_messages(query: str, contexts: list[dict], chat_history: list[dict]) -> tuple[str, list[dict]]:
+    """Build the messages list for Claude."""
     context_prompt = build_context_prompt(contexts)
 
-    # Build message with context
-    user_message = f"""Based on the following transcript excerpts from the Monroe Institute Explorer Sessions, please answer the user's question.
+    user_message = f"""Based on the following transcript excerpts from the Monroe Institute archives, please answer the user's question.
 
 {context_prompt}
 
 User's question: {query}"""
 
-    # Build messages list with history
     messages = []
-    for msg in chat_history[-10:]:  # Keep last 10 messages for context
+    for msg in chat_history[-10:]:
         messages.append(msg)
     messages.append({"role": "user", "content": user_message})
 
-    response = claude_client.messages.create(
+    return messages
+
+
+def stream_claude_response(query: str, contexts: list[dict], chat_history: list[dict],
+                           claude_client):
+    """Stream response from Claude for a conversational feel."""
+    messages = build_claude_messages(query, contexts, chat_history)
+
+    with claude_client.messages.stream(
         model=CLAUDE_MODEL,
         max_tokens=2048,
         system=SYSTEM_PROMPT,
         messages=messages,
-    )
-
-    return response.content[0].text
+    ) as stream:
+        for text in stream.text_stream:
+            yield text
 
 
 # ── Streamlit UI ───────────────────────────────────────────────────────────
@@ -258,12 +263,12 @@ def main():
             with st.spinner("Searching transcripts..."):
                 contexts = retrieve_context(prompt, voyage_client, pinecone_index, top_k=top_k)
 
-            with st.spinner("Synthesizing answer..."):
-                response = chat_with_claude(
+            # Stream the response word by word
+            response = st.write_stream(
+                stream_claude_response(
                     prompt, contexts, st.session_state.chat_history, claude_client
                 )
-
-            st.markdown(response)
+            )
 
             # Show sources
             if contexts and show_sources:
