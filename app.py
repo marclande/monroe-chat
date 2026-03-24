@@ -166,6 +166,110 @@ CUSTOM_CSS = """
     font-weight: 500;
 }
 
+.hero-classified {
+    display: inline-block;
+    margin-top: 1.2rem;
+    padding: 0.5rem 1.2rem;
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    border-radius: 8px;
+    background: rgba(139, 92, 246, 0.06);
+    backdrop-filter: blur(10px);
+}
+
+.hero-classified-text {
+    font-size: 0.75rem;
+    color: rgba(180, 175, 210, 0.6);
+    letter-spacing: 0.05em;
+    line-height: 1.5;
+}
+
+.hero-classified-text strong {
+    color: rgba(220, 210, 255, 0.85);
+}
+
+/* ── Mobile Archive Summary (visible only on mobile) ── */
+.mobile-archive-summary {
+    display: none;
+    margin: 1.5rem auto;
+    max-width: 700px;
+    padding: 1rem 1.2rem;
+    border: 1px solid rgba(139, 92, 246, 0.12);
+    border-radius: 12px;
+    background: rgba(15, 15, 35, 0.5);
+    backdrop-filter: blur(10px);
+}
+
+.mobile-archive-summary .archive-stats {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    justify-content: center;
+}
+
+.mobile-archive-summary .stat-pill {
+    font-size: 0.72rem;
+    color: rgba(180, 175, 210, 0.7);
+    background: rgba(139, 92, 246, 0.08);
+    border: 1px solid rgba(139, 92, 246, 0.12);
+    border-radius: 20px;
+    padding: 0.3rem 0.7rem;
+    white-space: nowrap;
+}
+
+/* ── Mobile Responsive ── */
+@media (max-width: 768px) {
+    .hero-container {
+        padding: 2rem 1rem 1rem 1rem;
+    }
+    .hero-glow {
+        width: 300px;
+        height: 200px;
+    }
+    .hero-title {
+        font-size: 1.7rem;
+    }
+    .hero-subtitle {
+        font-size: 0.95rem;
+        max-width: 100%;
+        padding: 0 0.5rem;
+    }
+    .hero-credential {
+        font-size: 0.7rem;
+    }
+    .hero-classified {
+        padding: 0.4rem 0.8rem;
+    }
+    .hero-classified-text {
+        font-size: 0.68rem;
+    }
+    .mobile-archive-summary {
+        display: block;
+    }
+    .paths-container {
+        padding: 0 0.5rem;
+    }
+    .path-category {
+        font-size: 0.65rem;
+        margin: 1.2rem 0 0.4rem 0.1rem;
+    }
+    .stButton > button {
+        font-size: 0.82rem !important;
+        padding: 0.6rem 0.8rem !important;
+    }
+    [data-testid="stChatMessage"] {
+        padding: 0.8rem !important;
+        border-radius: 12px !important;
+    }
+    [data-testid="stChatMessage"] p,
+    [data-testid="stChatMessage"] li {
+        font-size: 0.88rem !important;
+    }
+    .main .block-container {
+        padding-left: 0.5rem !important;
+        padding-right: 0.5rem !important;
+    }
+}
+
 /* ── Exploration Paths ── */
 .paths-container {
     max-width: 750px;
@@ -603,6 +707,23 @@ Member-exclusive talks and interviews.
             </div>
             <div class="hero-credential">
                 770+ archived sessions · Monroe Institute · 1974–present
+            </div>
+            <div class="hero-classified">
+                <div class="hero-classified-text">
+                    Includes material from the <strong>CIA Gateway Process</strong> report
+                    and <strong>U.S. Army INSCOM</strong> remote viewing sessions —
+                    formerly classified, now declassified
+                </div>
+            </div>
+        </div>
+        <div class="mobile-archive-summary">
+            <div class="archive-stats">
+                <span class="stat-pill">460+ Explorer Sessions</span>
+                <span class="stat-pill">280+ Robert Monroe Talks</span>
+                <span class="stat-pill">CIA Gateway Report</span>
+                <span class="stat-pill">INSCOM Military Sessions</span>
+                <span class="stat-pill">16 Professional Seminars</span>
+                <span class="stat-pill">14 Quarterly Tapes</span>
             </div>
         </div>
         """, unsafe_allow_html=True)
