@@ -7,13 +7,13 @@ OG_TAGS = """
     <!-- OG Meta Tags -->
     <meta property="og:title" content="Explore Declassified Consciousness Archives" />
     <meta property="og:description" content="Real transcripts from Monroe Institute research, CIA Gateway studies, and military sessions." />
-    <meta property="og:image" content="https://raw.githubusercontent.com/marclande/monroe-chat/main/og-preview.png" />
+    <meta property="og:image" content="https://raw.githubusercontent.com/marclande/monroe-chat/main/og-preview.jpg" />
     <meta property="og:url" content="https://chatv2.lunabus.co" />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="Explore Declassified Consciousness Archives" />
     <meta name="twitter:description" content="Real transcripts from Monroe Institute research, CIA Gateway studies, and military sessions." />
-    <meta name="twitter:image" content="https://raw.githubusercontent.com/marclande/monroe-chat/main/og-preview.png" />
+    <meta name="twitter:image" content="https://raw.githubusercontent.com/marclande/monroe-chat/main/og-preview.jpg" />
 """
 
 def inject():
