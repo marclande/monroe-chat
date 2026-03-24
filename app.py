@@ -688,20 +688,6 @@ def main():
         layout="wide",
     )
 
-    # Inject OG meta tags for social previews
-    og_image_url = "https://chatv2.lunabus.co/_stcore/static/og-preview.png"
-    st.markdown(f"""
-    <meta property="og:title" content="Explore Declassified Consciousness Archives" />
-    <meta property="og:description" content="Real transcripts from Monroe Institute research, CIA Gateway studies, and military sessions." />
-    <meta property="og:image" content="{og_image_url}" />
-    <meta property="og:url" content="https://chatv2.lunabus.co" />
-    <meta property="og:type" content="website" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Explore Declassified Consciousness Archives" />
-    <meta name="twitter:description" content="Real transcripts from Monroe Institute research, CIA Gateway studies, and military sessions." />
-    <meta name="twitter:image" content="{og_image_url}" />
-    """, unsafe_allow_html=True)
-
     # Inject custom CSS
     st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
