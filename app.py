@@ -49,18 +49,39 @@ FORMAT:
 
 # ── Exploration Paths (grouped by depth) ────────────────────────────────────
 
+HERO_CHIP = {"icon": "👁", "label": "What did people actually experience outside their bodies?"}
+
 EXPLORATION_PATHS = {
-    "Begin Here": [
-        {"icon": "🌀", "label": "What is Hemi-Sync and how does it alter consciousness?"},
-        {"icon": "🧭", "label": "What are Focus levels and what happens at each one?"},
+    "Start Here": [
+        {"icon": "🌀", "label": "How did these experiments actually change people's consciousness?"},
+        {"icon": "🧭", "label": "What happens as people go deeper into these states?"},
+        {"icon": "📂", "label": "What's inside these archived sessions?"},
+        {"icon": "🧠", "label": "What were researchers trying to figure out?"},
     ],
     "Most Surprising": [
-        {"icon": "👁️", "label": "What did explorers encounter when they left their bodies?"},
-        {"icon": "💀", "label": "What did the explorers discover about death and the afterlife?"},
+        {"icon": "👁", "label": "What did people actually see outside their bodies?"},
+        {"icon": "💀", "label": "Did anyone report experiences after death?"},
+        {"icon": "🚪", "label": "How far did these experiences go?"},
+        {"icon": "🧠", "label": "What changed people after these sessions?"},
+        {"icon": "🧩", "label": "What were the most unexpected discoveries?"},
     ],
-    "Deep Exploration": [
-        {"icon": "🔮", "label": "Who is Miranon and what did they teach through explorer SHE?"},
-        {"icon": "⚡", "label": "What happened during the INSCOM military remote viewing sessions?"},
+    "Military Files": [
+        {"icon": "⚡", "label": "What happened during the military's remote viewing sessions?"},
+        {"icon": "📡", "label": "What did the CIA Gateway research actually find?"},
+        {"icon": "🧪", "label": "What were these experiments trying to prove?"},
+        {"icon": "📁", "label": "What did the military conclude from all of this?"},
+    ],
+    "Strange & Unexplained": [
+        {"icon": "👻", "label": "Strangest experiences in the archives"},
+        {"icon": "🔮", "label": "Did anyone report contact with non-physical entities?"},
+        {"icon": "🌀", "label": "Experiences that couldn't be explained"},
+        {"icon": "🧠", "label": "Patterns across hundreds of sessions"},
+    ],
+    "Go Deeper": [
+        {"icon": "🧭", "label": "What are Focus levels and how do they work?"},
+        {"icon": "🔮", "label": "Who — or what — is Miranon?"},
+        {"icon": "📖", "label": "Full session breakdowns"},
+        {"icon": "🧬", "label": "Recurring themes across transcripts"},
     ],
 }
 
@@ -268,6 +289,10 @@ CUSTOM_CSS = """
         padding-left: 0.5rem !important;
         padding-right: 0.5rem !important;
     }
+    .hero-chip-container .stButton > button {
+        font-size: 0.92rem !important;
+        padding: 0.8rem 1rem !important;
+    }
 }
 
 /* ── Exploration Paths ── */
@@ -289,6 +314,14 @@ CUSTOM_CSS = """
 
 .path-category:first-child {
     margin-top: 0;
+}
+
+/* ── Hero Chip ── */
+.hero-chip-container {
+    max-width: 750px;
+    margin: 1.5rem auto 0.5rem auto;
+    position: relative;
+    z-index: 1;
 }
 
 /* Style the Streamlit buttons as exploration paths */
@@ -318,6 +351,25 @@ CUSTOM_CSS = """
 
 .stButton > button:active {
     transform: translateY(0) !important;
+}
+
+/* ── Hero Chip (emphasized top button) ── */
+.hero-chip-container .stButton > button {
+    background: rgba(139, 92, 246, 0.12) !important;
+    border: 1px solid rgba(139, 92, 246, 0.3) !important;
+    font-size: 1.05rem !important;
+    padding: 1rem 1.5rem !important;
+    color: rgba(230, 225, 250, 0.95) !important;
+    font-weight: 500 !important;
+    box-shadow: 0 4px 20px rgba(139, 92, 246, 0.1),
+                0 0 30px rgba(139, 92, 246, 0.05) !important;
+}
+
+.hero-chip-container .stButton > button:hover {
+    background: rgba(139, 92, 246, 0.2) !important;
+    border-color: rgba(139, 92, 246, 0.5) !important;
+    box-shadow: 0 8px 40px rgba(139, 92, 246, 0.18),
+                0 0 40px rgba(139, 92, 246, 0.08) !important;
 }
 
 /* ── Chat Input ── */
@@ -727,6 +779,14 @@ Member-exclusive talks and interviews.
             </div>
         </div>
         """, unsafe_allow_html=True)
+
+        # Hero chip (emphasized)
+        st.markdown('<div class="hero-chip-container">', unsafe_allow_html=True)
+        hero_label = f"{HERO_CHIP['icon']}  {HERO_CHIP['label']}"
+        if st.button(hero_label, key="hero_chip", use_container_width=True):
+            st.session_state.pending_question = HERO_CHIP["label"]
+            st.rerun()
+        st.markdown('</div>', unsafe_allow_html=True)
 
         # Exploration paths
         st.markdown('<div class="paths-container">', unsafe_allow_html=True)
