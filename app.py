@@ -745,6 +745,14 @@ Member-exclusive talks and interviews.
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
+    # ── Handle Pending Question (from chip click) ──
+    if "pending_question" in st.session_state:
+        pending = st.session_state.pop("pending_question")
+        with st.chat_message("user"):
+            st.markdown(pending)
+        handle_query(pending, claude_client, voyage_client, pinecone_index, top_k, show_sources)
+        st.rerun()
+
     # ── Welcome Portal (before any conversation) ──
     if not st.session_state.messages:
         # Hero section
@@ -819,14 +827,6 @@ Member-exclusive talks and interviews.
                                         f"(relevance: {src['score']:.0%})")
                             st.caption(src["text"][:300] + "..." if len(src["text"]) > 300 else src["text"])
                             st.divider()
-
-    # ── Handle Pending Question ──
-    if "pending_question" in st.session_state:
-        pending = st.session_state.pop("pending_question")
-        with st.chat_message("user"):
-            st.markdown(pending)
-        handle_query(pending, claude_client, voyage_client, pinecone_index, top_k, show_sources)
-        st.rerun()
 
     # ── Chat Input ──
     if prompt := st.chat_input("Ask about out-of-body experiences, Focus levels, or what explorers discovered..."):
