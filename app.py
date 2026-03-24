@@ -536,6 +536,36 @@ def init_clients():
     return claude, voyage, index, bm25
 
 
+def rewrite_query_with_context(query: str, chat_history: list[dict], claude_client) -> str:
+    """Rewrite a follow-up question into a standalone query using conversation history.
+    This ensures RAG retrieval finds the right documents even for vague follow-ups."""
+    if not chat_history:
+        return query
+
+    # Build a condensed history (last 4 messages)
+    recent = chat_history[-4:]
+    history_text = "\n".join(
+        f"{'User' if m['role'] == 'user' else 'Assistant'}: {m['content'][:300]}"
+        for m in recent
+    )
+
+    rewrite_prompt = f"""Given this conversation history and a follow-up question, rewrite the follow-up into a standalone search query that captures the full intent. Keep it concise (1-2 sentences max). Only return the rewritten query, nothing else.
+
+Conversation history:
+{history_text}
+
+Follow-up question: {query}
+
+Standalone search query:"""
+
+    response = claude_client.messages.create(
+        model=CLAUDE_MODEL,
+        max_tokens=150,
+        messages=[{"role": "user", "content": rewrite_prompt}],
+    )
+    return response.content[0].text.strip()
+
+
 def retrieve_context(query: str, voyage_client, pinecone_index, bm25_index,
                      top_k: int = TOP_K) -> list[dict]:
     """Hybrid retrieval: vector search + BM25 keyword search + Voyage reranking."""
@@ -769,7 +799,11 @@ def handle_query(prompt, claude_client, voyage_client, pinecone_index, bm25_inde
 
     with st.chat_message("assistant"):
         with st.spinner("Searching the archives..."):
-            contexts = retrieve_context(prompt, voyage_client, pinecone_index, bm25_index, top_k=top_k)
+            # Rewrite follow-up questions to be standalone for better retrieval
+            search_query = rewrite_query_with_context(
+                prompt, st.session_state.chat_history, claude_client
+            ) if st.session_state.chat_history else prompt
+            contexts = retrieve_context(search_query, voyage_client, pinecone_index, bm25_index, top_k=top_k)
 
         # Assess confidence and show indicator
         confidence_level, confidence_icon, avg_score = assess_confidence(contexts)
