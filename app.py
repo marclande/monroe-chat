@@ -36,10 +36,10 @@ You have deep knowledge of:
 INSTRUCTIONS:
 1. Ground your answers in the actual transcript excerpts provided as context. Always cite your sources using the source label provided with each excerpt and include a relevant quote.
 2. When synthesizing across sessions, note which explorers/sessions contribute to each point.
-3. If the context doesn't contain enough information to answer fully, say so honestly — don't fabricate details about the sessions.
+3. If the context doesn't contain enough information to answer fully, say so honestly — don't fabricate details about the sessions. Suggest related topics the archives DO cover well, such as Focus levels, out-of-body experiences, entity communication, Hemi-Sync, Robert Monroe's teachings, or the Gateway Process.
 4. Use a warm, knowledgeable tone — like a seasoned researcher sharing fascinating findings.
 5. When asked about specific explorers, sessions, or phenomena, provide specific details from the transcripts.
-6. If a question is about something not covered in the provided context, acknowledge that and offer to search for related topics.
+6. If a question is about something not covered in the provided context, acknowledge that and suggest 2-3 related topics from the archives the user might find interesting instead.
 
 FORMAT:
 - Use clear paragraphs for readability
@@ -648,6 +648,30 @@ def stream_claude_response(query: str, contexts: list[dict], chat_history: list[
             yield text
 
 
+def assess_confidence(contexts: list[dict]) -> tuple[str, str, float]:
+    """Assess confidence based on relevance scores. Returns (level, color, avg_score)."""
+    if not contexts:
+        return "low", "🔴", 0.0
+    avg_score = sum(c["score"] for c in contexts) / len(contexts)
+    strong_matches = sum(1 for c in contexts if c["score"] >= 0.60)
+    if avg_score >= 0.60 or strong_matches >= 3:
+        return "high", "🟢", avg_score
+    elif avg_score >= 0.40:
+        return "moderate", "🟡", avg_score
+    else:
+        return "low", "🔴", avg_score
+
+
+def score_color(score: float) -> str:
+    """Return a hex color based on relevance score."""
+    if score >= 0.60:
+        return "#4ade80"  # green
+    elif score >= 0.40:
+        return "#facc15"  # amber
+    else:
+        return "#f87171"  # red
+
+
 def handle_query(prompt, claude_client, voyage_client, pinecone_index, top_k, show_sources):
     """Process a user query: retrieve context, stream response, show sources."""
     st.session_state.messages.append({"role": "user", "content": prompt})
@@ -656,6 +680,18 @@ def handle_query(prompt, claude_client, voyage_client, pinecone_index, top_k, sh
         with st.spinner("Searching the archives..."):
             contexts = retrieve_context(prompt, voyage_client, pinecone_index, top_k=top_k)
 
+        # Assess confidence and show indicator
+        confidence_level, confidence_icon, avg_score = assess_confidence(contexts)
+        if confidence_level == "low":
+            st.markdown(
+                f'<div style="padding:8px 12px;border-radius:8px;background:rgba(248,113,113,0.1);'
+                f'border:1px solid rgba(248,113,113,0.3);margin-bottom:12px;font-size:0.9em;'
+                f'color:#f0c0c0;">'
+                f'{confidence_icon} <strong>Limited archive coverage</strong> — '
+                f'The archives don\'t contain much on this topic. '
+                f'The answer below draws from the closest available material.</div>',
+                unsafe_allow_html=True)
+
         response = st.write_stream(
             stream_claude_response(
                 prompt, contexts, st.session_state.chat_history, claude_client
@@ -663,10 +699,16 @@ def handle_query(prompt, claude_client, voyage_client, pinecone_index, top_k, sh
         )
 
         if contexts and show_sources:
-            with st.expander("View source transcripts"):
+            # Count strong vs weak sources
+            strong = sum(1 for c in contexts if c["score"] >= 0.40)
+            with st.expander(f"View source transcripts ({strong} of {len(contexts)} relevant)"):
                 for src in contexts:
-                    st.markdown(f"**{format_source_label(src)}** "
-                                f"(relevance: {src['score']:.0%})")
+                    color = score_color(src["score"])
+                    st.markdown(
+                        f'**{format_source_label(src)}** '
+                        f'<span style="color:{color};font-weight:600;">'
+                        f'(relevance: {src["score"]:.0%})</span>',
+                        unsafe_allow_html=True)
                     st.caption(src["text"][:300] + "..." if len(src["text"]) > 300 else src["text"])
                     st.divider()
 
@@ -674,6 +716,7 @@ def handle_query(prompt, claude_client, voyage_client, pinecone_index, top_k, sh
         "role": "assistant",
         "content": response,
         "sources": contexts,
+        "confidence": confidence_level,
     })
     st.session_state.chat_history.append({"role": "user", "content": prompt})
     st.session_state.chat_history.append({"role": "assistant", "content": response})
@@ -841,12 +884,26 @@ Member-exclusive talks and interviews.
         # ── Chat History ──
         for message in st.session_state.messages:
             with st.chat_message(message["role"]):
+                if message.get("confidence") == "low" and message["role"] == "assistant":
+                    st.markdown(
+                        '<div style="padding:8px 12px;border-radius:8px;background:rgba(248,113,113,0.1);'
+                        'border:1px solid rgba(248,113,113,0.3);margin-bottom:12px;font-size:0.9em;'
+                        'color:#f0c0c0;">'
+                        '🔴 <strong>Limited archive coverage</strong> — '
+                        'The archives don\'t contain much on this topic. '
+                        'The answer below draws from the closest available material.</div>',
+                        unsafe_allow_html=True)
                 st.markdown(message["content"])
                 if message.get("sources") and show_sources:
-                    with st.expander("View source transcripts"):
+                    strong = sum(1 for c in message["sources"] if c["score"] >= 0.40)
+                    with st.expander(f"View source transcripts ({strong} of {len(message['sources'])} relevant)"):
                         for src in message["sources"]:
-                            st.markdown(f"**{format_source_label(src)}** "
-                                        f"(relevance: {src['score']:.0%})")
+                            color = score_color(src["score"])
+                            st.markdown(
+                                f'**{format_source_label(src)}** '
+                                f'<span style="color:{color};font-weight:600;">'
+                                f'(relevance: {src["score"]:.0%})</span>',
+                                unsafe_allow_html=True)
                             st.caption(src["text"][:300] + "..." if len(src["text"]) > 300 else src["text"])
                             st.divider()
 
