@@ -791,6 +791,7 @@ Member-exclusive talks and interviews.
         # Exploration paths
         st.markdown('<div class="paths-container">', unsafe_allow_html=True)
 
+        chip_idx = 0
         for category, paths in EXPLORATION_PATHS.items():
             st.markdown(f'<div class="path-category">{category}</div>',
                         unsafe_allow_html=True)
@@ -798,10 +799,11 @@ Member-exclusive talks and interviews.
             for i, path in enumerate(paths):
                 col = cols[i % 2]
                 btn_label = f"{path['icon']}  {path['label']}"
-                if col.button(btn_label, key=f"path_{category}_{i}",
+                if col.button(btn_label, key=f"chip_{chip_idx}",
                               use_container_width=True):
                     st.session_state.pending_question = path["label"]
                     st.rerun()
+                chip_idx += 1
 
         st.markdown('</div>', unsafe_allow_html=True)
 
