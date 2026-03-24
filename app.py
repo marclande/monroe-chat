@@ -693,7 +693,7 @@ def main():
 
     # Force scroll to top on page load (components.html actually executes JS)
     import streamlit.components.v1 as components
-    if not st.session_state.messages:
+    if not st.session_state.get("messages", []):
         components.html("""
         <script>
             // Scroll parent Streamlit frame to top
