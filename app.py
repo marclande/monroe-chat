@@ -13,6 +13,7 @@ import streamlit as st
 import anthropic
 import voyageai
 from pinecone import Pinecone
+from bm25_index import BM25Index
 
 # ── Config ──────────────────────────────────────────────────────────────────
 
@@ -531,32 +532,122 @@ def init_clients():
     voyage = voyageai.Client(api_key=os.getenv("VOYAGE_API_KEY"))
     pc = Pinecone(api_key=os.getenv("PINECONE_API_KEY"))
     index = pc.Index(PINECONE_INDEX_NAME)
-    return claude, voyage, index
+    bm25 = BM25Index("bm25_corpus.json")
+    return claude, voyage, index, bm25
 
 
-def retrieve_context(query: str, voyage_client, pinecone_index, top_k: int = TOP_K) -> list[dict]:
-    """Embed the query and retrieve relevant chunks from Pinecone."""
+def retrieve_context(query: str, voyage_client, pinecone_index, bm25_index,
+                     top_k: int = TOP_K) -> list[dict]:
+    """Hybrid retrieval: vector search + BM25 keyword search + Voyage reranking."""
+
+    # Stage 1: Vector search (top 25)
     result = voyage_client.embed([query], model=VOYAGE_MODEL, input_type="query")
     query_embedding = result.embeddings[0]
 
-    results = pinecone_index.query(
+    vector_results = pinecone_index.query(
         vector=query_embedding,
-        top_k=top_k,
+        top_k=25,
         include_metadata=True,
     )
 
-    contexts = []
-    for match in results.matches:
+    # Build lookup of all vector results
+    all_candidates = {}
+    for match in vector_results.matches:
         meta = match.metadata
-        contexts.append({
+        all_candidates[match.id] = {
+            "id": match.id,
             "text": meta.get("text", ""),
             "explorer_id": meta.get("explorer_id", "Unknown"),
             "session_number": meta.get("session_number", "?"),
             "filename": meta.get("filename", ""),
             "topics": meta.get("topics", ""),
-            "score": match.score,
-        })
+            "vector_score": match.score,
+            "vector_rank": None,
+            "bm25_rank": None,
+        }
 
+    # Assign vector ranks
+    for rank, match in enumerate(vector_results.matches):
+        all_candidates[match.id]["vector_rank"] = rank
+
+    # Stage 2: BM25 keyword search (top 25)
+    if bm25_index.is_ready:
+        bm25_results = bm25_index.search(query, top_k=25)
+        for rank, (chunk_id, bm25_score) in enumerate(bm25_results):
+            if chunk_id in all_candidates:
+                all_candidates[chunk_id]["bm25_rank"] = rank
+            else:
+                # BM25 found something vector search missed — fetch from Pinecone
+                try:
+                    fetch_result = pinecone_index.fetch(ids=[chunk_id])
+                    if chunk_id in fetch_result.vectors:
+                        vec = fetch_result.vectors[chunk_id]
+                        meta = vec.metadata
+                        all_candidates[chunk_id] = {
+                            "id": chunk_id,
+                            "text": meta.get("text", ""),
+                            "explorer_id": meta.get("explorer_id", "Unknown"),
+                            "session_number": meta.get("session_number", "?"),
+                            "filename": meta.get("filename", ""),
+                            "topics": meta.get("topics", ""),
+                            "vector_score": 0.0,
+                            "vector_rank": None,
+                            "bm25_rank": rank,
+                        }
+                except Exception:
+                    pass
+
+    # Stage 3: Reciprocal Rank Fusion
+    K = 60  # RRF constant
+    for cid, candidate in all_candidates.items():
+        rrf = 0.0
+        if candidate["vector_rank"] is not None:
+            rrf += 1.0 / (K + candidate["vector_rank"])
+        if candidate["bm25_rank"] is not None:
+            rrf += 1.0 / (K + candidate["bm25_rank"])
+        candidate["rrf_score"] = rrf
+
+    # Sort by RRF score, take top 20 for reranking
+    sorted_candidates = sorted(all_candidates.values(), key=lambda x: x["rrf_score"], reverse=True)
+    top_candidates = sorted_candidates[:20]
+
+    # Stage 4: Voyage reranking
+    try:
+        docs = [c["text"] for c in top_candidates]
+        if docs:
+            rerank_result = voyage_client.rerank(
+                query=query,
+                documents=docs,
+                model="rerank-2",
+                top_k=top_k,
+            )
+            reranked = []
+            for r in rerank_result.results:
+                candidate = top_candidates[r.index]
+                reranked.append({
+                    "text": candidate["text"],
+                    "explorer_id": candidate["explorer_id"],
+                    "session_number": candidate["session_number"],
+                    "filename": candidate["filename"],
+                    "topics": candidate["topics"],
+                    "score": r.relevance_score,
+                })
+            return reranked
+    except Exception as e:
+        # Fallback: use RRF scores if reranking fails
+        pass
+
+    # Fallback: return top_k by RRF score with vector_score as display score
+    contexts = []
+    for candidate in top_candidates[:top_k]:
+        contexts.append({
+            "text": candidate["text"],
+            "explorer_id": candidate["explorer_id"],
+            "session_number": candidate["session_number"],
+            "filename": candidate["filename"],
+            "topics": candidate["topics"],
+            "score": candidate.get("vector_score", 0.0),
+        })
     return contexts
 
 
@@ -672,13 +763,13 @@ def score_color(score: float) -> str:
         return "#f87171"  # red
 
 
-def handle_query(prompt, claude_client, voyage_client, pinecone_index, top_k, show_sources):
+def handle_query(prompt, claude_client, voyage_client, pinecone_index, bm25_index, top_k, show_sources):
     """Process a user query: retrieve context, stream response, show sources."""
     st.session_state.messages.append({"role": "user", "content": prompt})
 
     with st.chat_message("assistant"):
         with st.spinner("Searching the archives..."):
-            contexts = retrieve_context(prompt, voyage_client, pinecone_index, top_k=top_k)
+            contexts = retrieve_context(prompt, voyage_client, pinecone_index, bm25_index, top_k=top_k)
 
         # Assess confidence and show indicator
         confidence_level, confidence_icon, avg_score = assess_confidence(contexts)
@@ -804,7 +895,7 @@ Member-exclusive talks and interviews.
 
     # ── Initialize ──
     try:
-        claude_client, voyage_client, pinecone_index = init_clients()
+        claude_client, voyage_client, pinecone_index, bm25 = init_clients()
     except Exception as e:
         st.error(f"Failed to initialize services: {e}")
         st.info("Check your API keys.")
@@ -911,13 +1002,13 @@ Member-exclusive talks and interviews.
     if pending:
         with st.chat_message("user"):
             st.markdown(pending)
-        handle_query(pending, claude_client, voyage_client, pinecone_index, top_k, show_sources)
+        handle_query(pending, claude_client, voyage_client, pinecone_index, bm25, top_k, show_sources)
 
     # ── Chat Input ──
     if prompt := st.chat_input("Ask about out-of-body experiences, Focus levels, or what explorers discovered..."):
         with st.chat_message("user"):
             st.markdown(prompt)
-        handle_query(prompt, claude_client, voyage_client, pinecone_index, top_k, show_sources)
+        handle_query(prompt, claude_client, voyage_client, pinecone_index, bm25, top_k, show_sources)
 
 
 if __name__ == "__main__":
