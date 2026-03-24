@@ -1,6 +1,7 @@
 """Inject OG meta tags into Streamlit's index.html at startup."""
 import streamlit
 import os
+import traceback
 
 OG_TAGS = """
     <!-- OG Meta Tags -->
@@ -16,22 +17,35 @@ OG_TAGS = """
 """
 
 def inject():
-    index_path = os.path.join(os.path.dirname(streamlit.__file__), "static", "index.html")
+    try:
+        index_path = os.path.join(os.path.dirname(streamlit.__file__), "static", "index.html")
+        print(f"Streamlit index.html path: {index_path}")
+        print(f"File exists: {os.path.exists(index_path)}")
+        print(f"File writable: {os.access(index_path, os.W_OK)}")
 
-    with open(index_path, "r") as f:
-        html = f.read()
+        with open(index_path, "r") as f:
+            html = f.read()
 
-    if "og:title" in html:
-        print("OG tags already injected, skipping.")
-        return
+        if "og:title" in html:
+            print("OG tags already injected, skipping.")
+            return
 
-    html = html.replace("<title>Streamlit</title>",
-                        f"<title>Monroe Archives</title>\n{OG_TAGS}")
+        html = html.replace("<title>Streamlit</title>",
+                            f"<title>Monroe Archives</title>\n{OG_TAGS}")
 
-    with open(index_path, "w") as f:
-        f.write(html)
+        with open(index_path, "w") as f:
+            f.write(html)
 
-    print(f"OG tags injected into {index_path}")
+        # Verify
+        with open(index_path, "r") as f:
+            verify = f.read()
+        if "og:title" in verify:
+            print("SUCCESS: OG tags injected!")
+        else:
+            print("FAILED: OG tags not found after write")
+    except Exception as e:
+        print(f"ERROR injecting OG tags: {e}")
+        traceback.print_exc()
 
 if __name__ == "__main__":
     inject()
