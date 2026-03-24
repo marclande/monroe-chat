@@ -691,6 +691,16 @@ def main():
     # Inject custom CSS
     st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
+    # Force scroll to top on page load
+    st.markdown("""
+    <script>
+        window.scrollTo(0, 0);
+        // Also handle Streamlit's delayed rendering
+        setTimeout(function() { window.scrollTo(0, 0); }, 100);
+        setTimeout(function() { window.scrollTo(0, 0); }, 500);
+    </script>
+    """, unsafe_allow_html=True)
+
     # ── Sidebar (minimal, elegant) ──
     with st.sidebar:
         st.markdown("### Monroe Archives")
