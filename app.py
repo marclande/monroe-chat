@@ -691,15 +691,32 @@ def main():
     # Inject custom CSS
     st.markdown(CUSTOM_CSS, unsafe_allow_html=True)
 
-    # Force scroll to top on page load
-    st.markdown("""
-    <script>
-        window.scrollTo(0, 0);
-        // Also handle Streamlit's delayed rendering
-        setTimeout(function() { window.scrollTo(0, 0); }, 100);
-        setTimeout(function() { window.scrollTo(0, 0); }, 500);
-    </script>
-    """, unsafe_allow_html=True)
+    # Force scroll to top on page load (components.html actually executes JS)
+    import streamlit.components.v1 as components
+    if not st.session_state.messages:
+        components.html("""
+        <script>
+            // Scroll parent Streamlit frame to top
+            window.parent.document.querySelector('section.main').scrollTo(0, 0);
+            window.parent.scrollTo(0, 0);
+            // Blur any focused input to prevent mobile auto-scroll to chat input
+            if (window.parent.document.activeElement) {
+                window.parent.document.activeElement.blur();
+            }
+            // Retry after Streamlit finishes rendering
+            setTimeout(function() {
+                window.parent.document.querySelector('section.main').scrollTo(0, 0);
+                window.parent.scrollTo(0, 0);
+                if (window.parent.document.activeElement && window.parent.document.activeElement.tagName === 'TEXTAREA') {
+                    window.parent.document.activeElement.blur();
+                }
+            }, 300);
+            setTimeout(function() {
+                window.parent.document.querySelector('section.main').scrollTo(0, 0);
+                window.parent.scrollTo(0, 0);
+            }, 800);
+        </script>
+        """, height=0)
 
     # ── Sidebar (minimal, elegant) ──
     with st.sidebar:
