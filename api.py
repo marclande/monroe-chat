@@ -7,22 +7,61 @@ Lovable (or any frontend) calls these endpoints.
 
 import os
 import json
+import time
 import uuid
 from pathlib import Path
+from collections import defaultdict
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).resolve().parent / ".env", override=True)
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, JSONResponse
 from pydantic import BaseModel, Field
 
 import anthropic
 import voyageai
 from pinecone import Pinecone
 from bm25_index import BM25Index
+
+# ── Security Config ─────────────────────────────────────────────────────────
+
+ALLOWED_ORIGINS = [
+    "https://chat.lunabus.co",
+    "https://monroe-scribe.lovable.app",
+    "http://localhost:5173",       # Lovable local dev
+    "http://localhost:3000",       # Local dev
+]
+
+FRONTEND_API_KEY = os.getenv("FRONTEND_API_KEY", "monroe-2025-secret")
+MAX_QUERY_LENGTH = 1000
+MAX_REQUESTS_PER_MINUTE = 20
+
+
+# ── Rate Limiter ────────────────────────────────────────────────────────────
+
+class RateLimiter:
+    """Simple in-memory per-IP rate limiter."""
+
+    def __init__(self, max_requests: int, window_seconds: int = 60):
+        self.max_requests = max_requests
+        self.window = window_seconds
+        self.requests: dict[str, list[float]] = defaultdict(list)
+
+    def is_allowed(self, ip: str) -> bool:
+        now = time.time()
+        # Clean old entries
+        self.requests[ip] = [t for t in self.requests[ip] if now - t < self.window]
+        if len(self.requests[ip]) >= self.max_requests:
+            return False
+        self.requests[ip].append(now)
+        return True
+
+
+rate_limiter = RateLimiter(max_requests=MAX_REQUESTS_PER_MINUTE)
+
 
 # ── Config ──────────────────────────────────────────────────────────────────
 
@@ -126,11 +165,38 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Lovable dev + production domains
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["Content-Type", "X-API-Key"],
 )
+
+
+@app.middleware("http")
+async def security_middleware(request: Request, call_next):
+    """API key validation + rate limiting for protected endpoints."""
+    # Skip security for health check and OPTIONS (CORS preflight)
+    if request.url.path == "/api/health" or request.method == "OPTIONS":
+        return await call_next(request)
+
+    # Rate limiting
+    client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else "unknown")
+    if not rate_limiter.is_allowed(client_ip):
+        return JSONResponse(
+            status_code=429,
+            content={"detail": "Too many requests. Please wait a moment."},
+        )
+
+    # API key check for chat endpoint
+    if request.url.path == "/api/chat":
+        api_key = request.headers.get("x-api-key", "")
+        if api_key != FRONTEND_API_KEY:
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "Invalid API key."},
+            )
+
+    return await call_next(request)
 
 
 # ── Request/Response Models ──────────────────────────────────────────────────
@@ -422,6 +488,13 @@ async def chat(request: ChatRequest):
     """Main chat endpoint. Supports both streaming (SSE) and non-streaming."""
     if not claude_client:
         raise HTTPException(status_code=503, detail="Service not initialized")
+
+    # Input validation
+    if len(request.query) > MAX_QUERY_LENGTH:
+        raise HTTPException(status_code=400, detail=f"Query too long. Max {MAX_QUERY_LENGTH} characters.")
+
+    if len(request.history) > 20:
+        raise HTTPException(status_code=400, detail="Too many history messages. Max 20.")
 
     # Rewrite follow-up queries for better retrieval
     search_query = rewrite_query_with_context(request.query, request.history) \
